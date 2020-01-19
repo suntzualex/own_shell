@@ -17,22 +17,13 @@
 int change_directory(char* dir);
 int exit_shell();
 
-// Voer een Command datastructuur uit.
-// Als deze niet uitgevoerd kan worden, geef dan een foutcode terug.
-// Als het commando uitgevoerd wordt,
-// wordt het huidige proces vervangen door het nieuwe proces.
+// Executeer een Command datastructuur.
+// Als het niet uitgevoerd kan worden, geef foutcode terug.
+// Als het uitgevoerd wordt, wordt het huidige proces vervangen door het nieuwe proces.
 int executeCommand(const Command& cmd) {
  auto& parts = cmd.parts;
  return execvp(parts);
 }
-
-// ------------------------------------------------------------
-
-// TODO: recursieve functie schrijven en alle andere functies
-// aanpassen
-// -------------------------------------------------------------
-
-
 
 /**
 * @brief executeAllCommands: chained commands and file input/output
@@ -43,8 +34,9 @@ int executeAllCommands(Expression& expression){
 
    bool background = expression.background; // set wait according to this bool.
    int fd[2]; // the filedescriptors
+
    pid_t pid; // place to hold pid
-   int fdd = 0; // backup file descriptor
+   int fdd = 0; // the backup
    ulong i = 0; // start index
    // create a pipeline.
    // do while the vector parts in the struct Command[i] is not empty
@@ -60,14 +52,14 @@ int executeAllCommands(Expression& expression){
            perror("fork failed");
            exit(EXIT_FAILURE);
        }
-       // child pid == 0 executing in child.
+       // child pid == 0
        if(pid == 0){
            // check of er een fromFile is.
            if(expression.fromFile != ""){
                // read from file.
                FILE *inFile = fopen(expression.fromFile.c_str(), "r");
                if(inFile == NULL){
-                   perror("Kan bestand niet lezen.\n");
+                   perror("Kan niet lezen van bestand.\n");
                    exit(EXIT_FAILURE);
                }
                int filein = fileno(inFile);
@@ -76,10 +68,9 @@ int executeAllCommands(Expression& expression){
                    perror("failed dup2 on file read.\n");
                    exit(EXIT_FAILURE);
                }
-               close(filein); // sluit bestand na lezen
+               close(filein);
                expression.fromFile = ""; // unset fromfile
-               dup2(fdd,0); // zonder checks TODO aanpassen
-           } else { // no file to read in.
+           } else {
            int dupr = dup2(fdd,0);
            if(dupr < 0){
                perror("dup2 failed");
@@ -88,7 +79,7 @@ int executeAllCommands(Expression& expression){
            }
            // if there is a next expression
            if((i+1) < expression.commands.size() && !expression.commands[i+1].parts.empty()){
-              dup2(fd[1],1); // schrijven.
+              dup2(fd[1],1); // write
            }
            // if there is no next expression but fileTo is set then write to a file
           if((i+1) == expression.commands.size() && expression.toFile != ""){
@@ -104,16 +95,17 @@ int executeAllCommands(Expression& expression){
               }
               close (filefd);
           }
-           close(fd[0]); // close read.
+           close(fd[0]); // close read
            executeCommand(expression.commands[i]); // execute command
            exit(1);
-       } else { // code executing in parent, if background is true (not 0) then do no wait.
-           close(fd[1]); // close write
-           fdd = fd[0]; // backup file descriptor
-           i++; // increment index
+       } else {
+           // code executing in parent, if background is true (not 0) then do no wait.
            if(!background){
-             waitpid(pid, nullptr, 0);
+               waitpid(pid, nullptr, 0);
            }
+           close(fd[1]); // close write
+           fdd = fd[0]; // backup
+           i++; // increment index
        }
    }
    return 0;
